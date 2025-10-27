@@ -2,30 +2,34 @@ use std::f64;
 
 #[derive(Clone, Debug)]
 pub struct YinResult {
+    sample_rate: f64,
     best_lag: usize,
     cmndf: Vec<f64>,
 }
 
 impl YinResult {
-    pub fn as_frequency(&self, sample_rate: f64) -> f64 {
-        sample_rate / self.best_lag as f64
+    pub fn get_frequency(&self) -> f64 {
+        self.sample_rate / self.best_lag as f64
     }
 
-    pub fn parabolic_interpolation(&self) -> f64 {
-        let lag = self.best_lag;
-        let cmndf = &self.cmndf;
-        let x0 = lag.saturating_sub(1); // max(0, lag-1)
-        let x2 = usize::min(cmndf.len() - 1, lag + 1);
-        let s0 = cmndf[x0];
-        let s1 = cmndf[lag];
-        let s2 = cmndf[x2];
-        let denom = s0 - 2.0 * s1 + s2;
-        if denom == 0.0 {
-            return lag as f64;
-        }
-        let delta = (s0 - s2) / (2.0 * denom);
-        lag as f64 + delta
+    pub fn get_frequency_with_interpolation(&self) -> f64 {
+        let best_lag_with_interpolation = parabolic_interpolation(self.best_lag, &self.cmndf);
+        self.sample_rate / best_lag_with_interpolation as f64
     }
+}
+
+fn parabolic_interpolation(lag: usize, cmndf: &[f64]) -> f64 {
+    let x0 = lag.saturating_sub(1); // max(0, lag-1)
+    let x2 = usize::min(cmndf.len() - 1, lag + 1);
+    let s0 = cmndf[x0];
+    let s1 = cmndf[lag];
+    let s2 = cmndf[x2];
+    let denom = s0 - 2.0 * s1 + s2;
+    if denom == 0.0 {
+        return lag as f64;
+    }
+    let delta = (s0 - s2) / (2.0 * denom);
+    lag as f64 + delta
 }
 
 #[derive(Clone, Debug)]
@@ -33,14 +37,23 @@ pub struct Yin {
     threshold: f64,
     min_lag: usize,
     max_lag: usize,
+    sample_rate: f64,
 }
 
 impl Yin {
-    pub fn init(threshold: f64, min_lag: usize, max_lag: usize) -> Yin {
+    pub fn init(
+        threshold: f64,
+        min_expected_frequency: f64,
+        max_expected_frequency: f64,
+        sample_rate: f64,
+    ) -> Yin {
+        let min_lag = (sample_rate / max_expected_frequency) as usize;
+        let max_lag = (sample_rate / min_expected_frequency) as usize;
         Yin {
             threshold,
             min_lag,
             max_lag,
+            sample_rate,
         }
     }
 
@@ -48,7 +61,11 @@ impl Yin {
         let df = df_values(frequencies, self.max_lag);
         let cmndf = cmndf_values(&df, self.max_lag);
         let best_lag = find_cmndf_argmin(&cmndf, self.min_lag, self.max_lag, self.threshold);
-        YinResult { best_lag, cmndf }
+        YinResult {
+            sample_rate: self.sample_rate,
+            best_lag,
+            cmndf,
+        }
     }
 }
 
@@ -113,24 +130,28 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
+    fn test_simple_sine() {
         let sample_rate = 1000.0;
         let frequency = 12.0;
         let seconds = 10.0;
         let signal = generate_sine_wave(frequency, sample_rate, seconds);
 
-        let max_lag = sample_rate / 10.0;
-        let min_lag = 1;
+        let min_expected_frequency = 10.0;
+        let max_expected_frequency = 100.0;
 
-        let yin = Yin::init(0.1, min_lag, max_lag.trunc() as usize);
+        let yin = Yin::init(
+            0.1,
+            min_expected_frequency,
+            max_expected_frequency,
+            sample_rate,
+        );
         let result = yin.yin(signal.as_slice());
-        let result_freq = result.as_frequency(sample_rate);
+        let result_freq = result.get_frequency();
         let result_diff_from_actual_freq = (result_freq - frequency).abs();
 
         assert!(result_diff_from_actual_freq < 1.0);
 
-        let refined_lag = result.parabolic_interpolation();
-        let refined_freq = sample_rate / refined_lag;
+        let refined_freq = result.get_frequency_with_interpolation();
         let refined_diff = (refined_freq - frequency).abs();
         assert!(refined_diff < 1.0);
         assert!(refined_diff < result_diff_from_actual_freq);
