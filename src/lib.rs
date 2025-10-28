@@ -14,7 +14,7 @@ impl YinResult {
 
     pub fn get_frequency_with_interpolation(&self) -> f64 {
         let best_lag_with_interpolation = parabolic_interpolation(self.best_lag, &self.cmndf);
-        self.sample_rate / best_lag_with_interpolation as f64
+        self.sample_rate / best_lag_with_interpolation
     }
 }
 
@@ -69,8 +69,9 @@ impl Yin {
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 fn df_values(frequencies: &[f64], max_lag: usize) -> Vec<f64> {
-    let mut df_list = vec![0.0; frequencies.len()];
+    let mut df_list = vec![0.0; max_lag + 1];
     for lag in 1..=max_lag {
         df_list[lag] = df(frequencies, lag);
     }
@@ -103,7 +104,7 @@ fn find_cmndf_argmin(cmndf: &[f64], min_lag: usize, max_lag: usize, threshold: f
     let mut lag = min_lag;
     while lag <= max_lag {
         if cmndf[lag] < threshold {
-            while lag + 1 <= max_lag && cmndf[lag + 1] < cmndf[lag] {
+            while lag < max_lag && cmndf[lag + 1] < cmndf[lag] {
                 lag += 1;
             }
             return lag;
