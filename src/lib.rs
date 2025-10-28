@@ -81,7 +81,7 @@ fn df(f: &[f64], lag: usize) -> f64 {
     let mut sum = 0.0;
     let n = f.len();
     for i in 0..(n - lag) {
-        let diff = f[i] as f64 - f[i + lag] as f64;
+        let diff = f[i] - f[i + lag];
         sum += diff * diff;
     }
     sum
@@ -129,6 +129,23 @@ mod tests {
             .collect()
     }
 
+    fn diff_from_actual_frequency_smaller_than_threshold(
+        result_frequency: f64,
+        actual_frequency: f64,
+        threshold: f64,
+    ) -> bool {
+        let result_diff_from_actual_freq = (result_frequency - actual_frequency).abs();
+        result_diff_from_actual_freq < threshold
+    }
+
+    fn interpolation_better_than_raw_result(result: YinResult, frequency: f64) -> bool {
+        let result_frequency = result.get_frequency();
+        let refined_frequency = result.get_frequency_with_interpolation();
+        let result_diff = (result_frequency - frequency).abs();
+        let refined_diff = (refined_frequency - frequency).abs();
+        refined_diff < result_diff
+    }
+
     #[test]
     fn test_simple_sine() {
         let sample_rate = 1000.0;
@@ -146,14 +163,131 @@ mod tests {
             sample_rate,
         );
         let result = yin.yin(signal.as_slice());
-        let result_freq = result.get_frequency();
-        let result_diff_from_actual_freq = (result_freq - frequency).abs();
 
-        assert!(result_diff_from_actual_freq < 1.0);
+        assert!(diff_from_actual_frequency_smaller_than_threshold(
+            result.get_frequency(),
+            frequency,
+            1.0
+        ));
+        assert!(diff_from_actual_frequency_smaller_than_threshold(
+            result.get_frequency_with_interpolation(),
+            frequency,
+            1.0,
+        ));
 
-        let refined_freq = result.get_frequency_with_interpolation();
-        let refined_diff = (refined_freq - frequency).abs();
-        assert!(refined_diff < 1.0);
-        assert!(refined_diff < result_diff_from_actual_freq);
+        assert!(interpolation_better_than_raw_result(result, frequency));
+    }
+
+    #[test]
+    fn test_sine_frequency_range() {
+        let sample_rate = 10000.0;
+        for freq in 10..50 {
+            let frequency = freq as f64;
+            let seconds = 2.0;
+            let signal = generate_sine_wave(frequency, sample_rate, seconds);
+
+            let min_expected_frequency = 5.0;
+            let max_expected_frequency = 100.0;
+
+            let yin = Yin::init(
+                0.1,
+                min_expected_frequency,
+                max_expected_frequency,
+                sample_rate,
+            );
+            let result = yin.yin(signal.as_slice());
+
+            if (sample_rate as i32 % freq) == 0 {
+                assert_eq!(result.get_frequency(), frequency);
+            } else {
+                assert!(diff_from_actual_frequency_smaller_than_threshold(
+                    result.get_frequency(),
+                    frequency,
+                    1.0
+                ));
+                assert!(diff_from_actual_frequency_smaller_than_threshold(
+                    result.get_frequency_with_interpolation(),
+                    frequency,
+                    1.0,
+                ));
+
+                assert!(interpolation_better_than_raw_result(result, frequency));
+            }
+        }
+    }
+
+    #[test]
+    fn test_harmonic_sines() {
+        let sample_rate = 44100.0;
+        let seconds = 2.0;
+        let frequency_1 = 50.0; // Minimal/Fundamental frequency - this is what YIN should find
+        let signal_1 = generate_sine_wave(frequency_1, sample_rate, seconds);
+        let frequency_2 = 150.0;
+        let signal_2 = generate_sine_wave(frequency_2, sample_rate, seconds);
+        let frequency_3 = 300.0;
+        let signal_3 = generate_sine_wave(frequency_3, sample_rate, seconds);
+
+        let min_expected_frequency = 10.0;
+        let max_expected_frequency = 500.0;
+
+        let yin = Yin::init(
+            0.1,
+            min_expected_frequency,
+            max_expected_frequency,
+            sample_rate,
+        );
+
+        let total_samples = (sample_rate * seconds).round() as usize;
+        let combined_signal: Vec<f64> = (0..total_samples)
+            .map(|n| signal_1[n] + signal_2[n] + signal_3[n])
+            .collect();
+
+        let result = yin.yin(&combined_signal);
+
+        assert!(diff_from_actual_frequency_smaller_than_threshold(
+            result.get_frequency(),
+            frequency_1,
+            1.0
+        ));
+    }
+
+    #[test]
+    fn test_unharmonic_sines() {
+        let sample_rate = 44100.0;
+        let seconds = 2.0;
+        let frequency_1 = 50.0;
+        let signal_1 = generate_sine_wave(frequency_1, sample_rate, seconds);
+        let frequency_2 = 66.0;
+        let signal_2 = generate_sine_wave(frequency_2, sample_rate, seconds);
+        let frequency_3 = 300.0;
+        let signal_3 = generate_sine_wave(frequency_3, sample_rate, seconds);
+
+        let min_expected_frequency = 10.0;
+        let max_expected_frequency = 500.0;
+
+        let yin = Yin::init(
+            0.1,
+            min_expected_frequency,
+            max_expected_frequency,
+            sample_rate,
+        );
+
+        let total_samples = (sample_rate * seconds).round() as usize;
+        let combined_signal: Vec<f64> = (0..total_samples)
+            .map(|n| signal_1[n] + signal_2[n] + signal_3[n])
+            .collect();
+
+        let result = yin.yin(&combined_signal);
+
+        let expected_frequency = (frequency_1 - frequency_2).abs();
+        assert!(diff_from_actual_frequency_smaller_than_threshold(
+            result.get_frequency(),
+            expected_frequency,
+            1.0
+        ));
+        assert!(interpolation_better_than_raw_result(
+            result,
+            expected_frequency
+        ));
     }
 }
