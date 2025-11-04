@@ -2,5 +2,12 @@
 name = "yin_rs"
 version = "0.1.0"
 edition = "2024"
+description = "Implementation of the YIN algorithm for estimating the fundamental frequency of an audio signal in Rust. Optimized for speed, and with parabolic interpretation for refining the result"
+repository = "https://github.com/winkt0/yin_rs"
+homepage = "https://github.com/winkt0/yin_rs"
+license = "MIT"
+readme = "README.md"
+keywords = ["yin", "algorithm", "signal", "processing", "analysis", "frequency"]
+categories = ["signal-processing", "algorithms", "frequency-estimation"]
 
 [dependencies]
