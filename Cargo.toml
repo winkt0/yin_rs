@@ -7,7 +7,7 @@ repository = "https://github.com/winkt0/yin_rs"
 homepage = "https://github.com/winkt0/yin_rs"
 license = "MIT"
 readme = "README.md"
-keywords = ["yin", "algorithm", "signal", "processing", "analysis", "frequency"]
-categories = ["signal-processing", "algorithms", "frequency-estimation"]
+keywords = ["yin", "algorithm", "signal", "processing", "frequency"]
+categories = ["mathematics", "algorithms", "multimedia::audio"]
 
 [dependencies]
