@@ -1,5 +1,6 @@
 use std::f64;
 
+/// The return value of the yin algorithm if it returns an OK result
 #[derive(Clone, Debug)]
 pub struct YinResult {
     sample_rate: f64,
@@ -32,6 +33,7 @@ fn parabolic_interpolation(lag: usize, cmndf: &[f64]) -> f64 {
     lag as f64 + delta
 }
 
+/// Struct bundling the YIN parameters
 #[derive(Clone, Debug)]
 pub struct Yin {
     threshold: f64,
@@ -57,6 +59,9 @@ impl Yin {
         }
     }
 
+    /// Implementation of the YIN algorithm.
+    /// Returns OK if it finds a lag value which minimizes the CMNDF function below the given threshold.
+    /// Returns Err otherwise.
     pub fn yin(&self, frequencies: &[f64]) -> Result<YinResult, String> {
         let df = difference_function_values(frequencies, self.max_lag);
         let cmndf = cumulative_mean_normalized_difference_function(&df, self.max_lag);
